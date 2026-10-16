@@ -6,6 +6,11 @@
 
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
+Based on the scenario and description in README.md, the core classes include:
+Owner: includes name, available_minutes they are free to perform tasks (like feeding their pet or walking), preferences, and a list of their pets
+Pet: name, species, age, tasks
+Task: title, duration_minutes, priority, category, frequency, is_completed
+Scheduler: owned by an owner and has logic like sorting task by priority, filtering, detecting conflicts, and generating a plan
 
 **b. Design changes**
 
