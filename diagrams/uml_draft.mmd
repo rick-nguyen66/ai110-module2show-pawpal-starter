@@ -1,14 +1,29 @@
 classDiagram
     %% Keep this file updated so it matches your final implementation.
 
+    class Priority {
+        <<enumeration>>
+        LOW = 1
+        MEDIUM = 2
+        HIGH = 3
+    }
+
+    class Frequency {
+        <<enumeration>>
+        ONCE
+        DAILY
+        WEEKLY
+    }
+
     class Owner {
         +str name
+        +time day_start
         +int available_minutes
         +list~str~ preferences
         +list~Pet~ pets
         +add_pet(pet: Pet) None
         +get_pets() list~Pet~
-        +get_all_tasks() list~Task~
+        +get_all_tasks() list~tuple~Pet, Task~~
     }
 
     class Pet {
@@ -24,28 +39,61 @@ classDiagram
     class Task {
         +str title
         +int duration_minutes
-        +str priority
+        +Priority priority
         +str category
-        +str frequency
-        +str preferred_time
-        +bool completed
-        +mark_complete() None
-        +is_due_today() bool
+        +Frequency frequency
+        +time preferred_time
+        +date last_completed
+        +mark_complete(on: date) None
+        +is_due(on: date) bool
         +edit(**changes) None
     }
 
     class Scheduler {
         +Owner owner
-        +list~Task~ tasks
-        +list~Task~ skipped_tasks
-        +sort_by_priority() list~Task~
-        +filter_tasks() list~Task~
-        +detect_conflicts() list~tuple~
-        +generate_plan() list~tuple~
-        +explain_plan() str
+        +filter_tasks(on: date) list~tuple~Pet, Task~~
+        +sort_by_priority(items) list~tuple~Pet, Task~~
+        +generate_plan(on: date) Plan
+        +detect_conflicts(entries: list~PlanEntry~) list~Conflict~
+        +explain_plan(plan: Plan) str
     }
 
-    Owner "1" --> "*" Pet : owns
-    Pet "1" --> "*" Task : has
-    Scheduler --> Owner : uses
-    Scheduler --> Task : schedules
+    class Plan {
+        +date day
+        +list~PlanEntry~ entries
+        +list~SkippedTask~ skipped
+    }
+
+    class PlanEntry {
+        +Pet pet
+        +Task task
+        +datetime start
+        +datetime end
+    }
+
+    class SkippedTask {
+        +Pet pet
+        +Task task
+        +str reason
+    }
+
+    class Conflict {
+        +PlanEntry first
+        +PlanEntry second
+        +str reason
+    }
+
+    Owner "1" *-- "0..*" Pet : owns
+    Pet "1" *-- "0..*" Task : has
+    Task --> Priority
+    Task --> Frequency
+    Scheduler "1" --> "1" Owner : plans for
+    Scheduler ..> Plan : produces
+    Scheduler ..> Conflict : detects
+    Plan "1" *-- "0..*" PlanEntry
+    Plan "1" *-- "0..*" SkippedTask
+    PlanEntry "*" --> "1" Pet
+    PlanEntry "*" --> "1" Task
+    SkippedTask "*" --> "1" Pet
+    SkippedTask "*" --> "1" Task
+    Conflict "*" --> "2" PlanEntry

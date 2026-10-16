@@ -16,7 +16,7 @@ Scheduler: owned by an owner and has logic like sorting task by priority, filter
 
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
-
+The biggest change made was specifying the plan detail object. The initial skeleton only had available_minutes for owners (which can be used to identify if a task can be done that day), but no other info on the start/end time for a task. For simplicity, the the owner will have a start time they are free to start, which the planner will layout tasks sequentially, rather than finding chunks of available times during the day, i.e., it is a "duration-only" planner.
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
