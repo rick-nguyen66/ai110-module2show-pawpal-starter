@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from enum import Enum, IntEnum
 from typing import Literal
@@ -26,10 +26,11 @@ class Frequency(str, Enum):
 
 @dataclass(eq=False)  # identity equality so remove_task() never removes a look-alike task
 class Task:
-    """A care task definition (walk, feeding, meds, etc.).
+    """One occurrence of a care task (walk, feeding, meds, etc.).
 
-    Completion is tracked as a date rather than a bool so recurring tasks
-    become due again on later days.
+    Each Task is a single occurrence with its own due_date. Completing a DAILY
+    or WEEKLY task returns a fresh Task for the next occurrence; the completed
+    one stays on the pet as history.
     """
 
     title: str
@@ -38,7 +39,8 @@ class Task:
     category: str = "general"
     frequency: Frequency = Frequency.DAILY
     preferred_time: time | None = None  # earliest desired start, e.g. time(8, 0)
-    last_completed: date | None = None
+    due_date: date | None = None  # None = due from today onward
+    last_completed: date | None = None  # set when this occurrence is completed
 
     def __post_init__(self) -> None:
         """Validate fields: duration must be positive; coerce priority/frequency to enums."""
@@ -52,33 +54,38 @@ class Task:
             self.priority = Priority(self.priority)
         self.frequency = Frequency(self.frequency.lower() if isinstance(self.frequency, str) else self.frequency)
 
-    def mark_complete(self, on: date) -> None:
-        """Record that this task was completed on the given date."""
+    def mark_complete(self, on: date) -> Task | None:
+        """Mark this occurrence completed on the given date.
+
+        Returns the next occurrence for DAILY (due on + 1 day) and WEEKLY
+        (due on + 7 days) tasks, or None for ONCE tasks. The next date is
+        counted from the completion date so late completions don't pile up.
+        """
         self.last_completed = on
+        if self.frequency is Frequency.DAILY:
+            return replace(self, due_date=on + timedelta(days=1), last_completed=None)
+        if self.frequency is Frequency.WEEKLY:
+            return replace(self, due_date=on + timedelta(days=7), last_completed=None)
+        return None
+
+    @property
+    def is_complete(self) -> bool:
+        """True once this occurrence has been completed."""
+        return self.last_completed is not None
 
     def is_due(self, on: date) -> bool:
-        """Return True if this task needs doing on the given date.
-
-        ONCE: due until completed. DAILY: due unless completed on `on`.
-        WEEKLY: due if never completed or last completed 7+ days before `on`.
-        """
-        if self.last_completed is None:
-            return True
-        if self.frequency is Frequency.ONCE:
+        """Return True if this occurrence is incomplete and due (or overdue) on the given date."""
+        if self.is_complete:
             return False
-        if self.frequency is Frequency.DAILY:
-            return self.last_completed < on
-        return (on - self.last_completed).days >= 7
+        return self.due_date is None or self.due_date <= on
 
     def next_due_date(self, on: date) -> date | None:
-        """Return the first date on or after `on` when this task is due (None if never again)."""
-        if self.is_due(on):
-            return on
-        if self.frequency is Frequency.ONCE:
+        """Return the first date on or after `on` when this occurrence is due (None if completed)."""
+        if self.is_complete:
             return None
-        if self.frequency is Frequency.DAILY:
-            return max(on, self.last_completed) + timedelta(days=1)
-        return max(on, self.last_completed + timedelta(days=7))
+        if self.due_date is None:
+            return on
+        return max(on, self.due_date)
 
     def edit(self, **changes) -> None:
         """Update one or more attributes of this task, re-running validation."""
@@ -121,6 +128,15 @@ class Pet:
     def get_tasks(self) -> list[Task]:
         """Return all tasks for this pet."""
         return list(self.tasks)
+
+    def complete_task(self, task: Task, on: date) -> Task | None:
+        """Mark one of this pet's tasks complete and add its next occurrence, if any."""
+        if not any(t is task for t in self.tasks):
+            raise ValueError(f"'{task.title}' is not one of {self.name}'s tasks")
+        next_task = task.mark_complete(on)
+        if next_task is not None:
+            self.add_task(next_task)
+        return next_task
 
 
 @dataclass
@@ -208,8 +224,8 @@ class Scheduler:
     ) -> list[tuple[Pet, Task]]:
         """Return (pet, task) pairs matching the given pet and status on a date.
 
-        status="due" keeps tasks still needing doing on `on`, "done" keeps tasks
-        already satisfied for `on`, and None keeps every task.
+        status="due" keeps incomplete tasks due (or overdue) on `on`, "done"
+        keeps completed tasks, and None keeps every task.
         """
         items = self.owner.get_all_tasks()
         if pet_name is not None:
@@ -217,7 +233,7 @@ class Scheduler:
         if status == "due":
             items = [(pet, task) for pet, task in items if task.is_due(on)]
         elif status == "done":
-            items = [(pet, task) for pet, task in items if not task.is_due(on)]
+            items = [(pet, task) for pet, task in items if task.is_complete]
         return items
 
     def sort_by_priority(self, items: list[tuple[Pet, Task]]) -> list[tuple[Pet, Task]]:
