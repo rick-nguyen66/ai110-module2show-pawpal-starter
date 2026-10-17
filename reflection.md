@@ -55,11 +55,13 @@ At one point, the AI suggested expanding the owner field to have a list of block
 
 - What behaviors did you test?
 - Why were these tests important?
+The 29 tests in tests/test_pawpal.py cover six areas: basics (completing a task, adding tasks), sorting (priority before preferred time, tie-breakers, chronological plan order), recurrence (daily and weekly next occurrences, once tasks not repeating, late completions, month and year boundaries, rejecting double completion), conflict detection (duplicate, nested, and triple overlaps, back-to-back tasks not counted as conflicts), slot fitting (filling gaps before a late high-priority task, exact-fit and too-long tasks, preferred times outside the window, zero available time), and filtering and editing (by pet and status, rolling back invalid edits, removing the exact task object). These tests were important because the scheduler's value depends on small rules that are easy to break without noticing, like an off-by-one at a window boundary, a recurring task showing up twice, or a skipped task getting the wrong reason. Many of them came from edge cases I wanted to be sure about, such as back-to-back tasks, which should not be flagged as conflicts.
 
 **b. Confidence**
 
 - How confident are you that your scheduler works correctly?
 - What edge cases would you test next if you had more time?
+I'm fairly confident, about 4 out of 5. Every core behavior has at least one test, all 29 pass, and I also ran a scripted check of the Streamlit app to confirm the warnings, schedule table, and skipped tasks appear as expected. With more time I would test windows that cross midnight (for example, starting at 23:00 with 120 minutes), since preferred times are attached to the plan's date and a 00:30 preference would be read as earlier that same day. I would also test overdue tasks carried over from earlier days, plans with several pets competing for the same slots, editing a task's due date or frequency after it has recurred, and the UI's mark-complete flow, which has no automated test yet.
 
 ---
 
@@ -68,11 +70,14 @@ At one point, the AI suggested expanding the owner field to have a list of block
 **a. What went well**
 
 - What part of this project are you most satisfied with?
+I'm most satisfied with the scheduling logic. It started as a simple duration-only planner and grew into one that tracks free gaps, respects preferred times, and fills earlier gaps with lower-priority tasks instead of wasting the time before a late high-priority task. It also never fails silently; every skipped task comes with a reason, and overlapping preferred times show up as warnings instead of errors. The test suite gave me confidence to make these changes without breaking earlier behavior.
 
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
+I would fix windows that cross midnight, since preferred times are currently attached to the plan's date and a 00:30 preference in a window starting at 23:00 gets scheduled at 23:00. I would also let the UI manage more than one pet, since the backend already supports several pets but the app only edits the first one, and either use the owner's preferences field in scheduling or remove it. Finally, I'd revisit the AI's earlier suggestion of letting owners set multiple blocks of free time during the day, which I skipped to stay in scope but which better matches a real owner's schedule.
 
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+Designing the system first, in the UML diagram, made working with AI much more effective. The diagram gave me a fixed blueprint to check every suggestion against, so I could accept the ones that fit, like the tests covering my stated edge cases, and turn down ones that drifted out of scope. I also learned to keep the diagram up to date as the code changed, because an outdated blueprint stops being useful for checking anything.
