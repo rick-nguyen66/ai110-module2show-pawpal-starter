@@ -19,6 +19,7 @@ def main() -> None:
     luna.add_task(Task("Breakfast", 10, Priority.HIGH, "feeding", preferred_time=time(7, 30)))
     luna.add_task(Task("Brush fur", 15, Priority.LOW, "grooming", Frequency.WEEKLY, preferred_time=time(9, 30)))
     pip.add_task(Task("Clean hutch", 20, Priority.MEDIUM, "cleaning", preferred_time=time(8, 30)))
+    pip.add_task(Task("Learn trics", 30, Priority.LOW, "exercise", preferred_time=time(8, 30)))
     pip.add_task(Task("Give meds", 5, Priority.HIGH, "medicine", Frequency.WEEKLY))
 
     scheduler = Scheduler(owner)

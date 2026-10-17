@@ -73,14 +73,13 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_priority()`, `Scheduler.sort_by_time()` | Planning order is priority (high first), then preferred time (earliest first, none last), then shorter duration. `sort_by_time()` orders by preferred time only, for display. Both are stable, so ties keep insertion order. |
+| Filtering | `Scheduler.filter_tasks(on, pet_name, status)` | Filter by pet name and by status: `"due"` (incomplete and due or overdue on `on`), `"done"` (completed), or `None` (all). Tasks that fit in no free gap are skipped with a reason (`plan.skipped`). |
+| Time placement | `Scheduler.generate_plan()` | Tracks free gaps in the owner's window and places each task in the earliest gap that starts at or after its preferred time and is long enough, so a late high-priority task doesn't waste the morning. |
+| Conflict handling | `Scheduler.find_requested_conflicts()`, `Scheduler.detect_conflicts()` | Tasks whose requested times overlap (same pet or different pets) are reported as warnings in `plan.conflicts` instead of raising errors. The higher-priority task keeps its slot and the other moves to the next free gap, so the final plan never overlaps. |
+| Recurring tasks | `Pet.complete_task()`, `Task.mark_complete()`, `Task.is_due()`, `Task.next_due_date()` | Each task is one occurrence with a `due_date`. Completing a DAILY or WEEKLY task adds a new occurrence due 1 or 7 days after the completion date. ONCE tasks don't recur. Completed tasks stay as history. |
 
 ## 📸 Demo Walkthrough
 
