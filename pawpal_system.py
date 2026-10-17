@@ -60,7 +60,10 @@ class Task:
         Returns the next occurrence for DAILY (due on + 1 day) and WEEKLY
         (due on + 7 days) tasks, or None for ONCE tasks. The next date is
         counted from the completion date so late completions don't pile up.
+        Raises ValueError if this occurrence is already complete.
         """
+        if self.is_complete:
+            raise ValueError(f"'{self.title}' was already completed on {self.last_completed.isoformat()}")
         self.last_completed = on
         if self.frequency is Frequency.DAILY:
             return replace(self, due_date=on + timedelta(days=1), last_completed=None)
@@ -285,7 +288,9 @@ class Scheduler:
                     plan.entries.append(PlanEntry(pet, task, start, end))
                     break
             else:
-                if earliest >= day_end:
+                if day_end <= day_start:
+                    reason = "owner has no available time"
+                elif earliest >= day_end:
                     reason = "preferred time is after the owner's available time"
                 else:
                     reason = "not enough free time remaining"

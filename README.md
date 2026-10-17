@@ -65,11 +65,17 @@ pytest
 pytest --cov
 ```
 
+Automated test suite covers edge cases, sorting correctness, conflict handling, recurrence logic, and core logic.
+Confidence level: 4/5
+
+
 Sample test output:
 
-```
-# Paste your pytest output here
-```
+collected 29 items                                                                                                     
+
+tests/test_pawpal.py .............................                                                               [100%]
+
+================================================== 29 passed in 0.08s ==================================================
 
 ## 📐 Smarter Scheduling
 
