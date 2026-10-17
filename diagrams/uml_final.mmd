@@ -1,0 +1,108 @@
+classDiagram
+    %% Keep this file updated so it matches your final implementation.
+
+    class Priority {
+        <<enumeration>>
+        LOW = 1
+        MEDIUM = 2
+        HIGH = 3
+    }
+
+    class Frequency {
+        <<enumeration>>
+        ONCE
+        DAILY
+        WEEKLY
+    }
+
+    class Owner {
+        +str name
+        +time day_start
+        +int available_minutes
+        +list~str~ preferences
+        +list~Pet~ pets
+        +add_pet(pet: Pet) None
+        +get_pets() list~Pet~
+        +get_all_tasks() list~tuple~Pet, Task~~
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +int age
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +remove_task(task: Task) None
+        +get_tasks() list~Task~
+        +complete_task(task: Task, on: date) Task | None
+    }
+
+    class Task {
+        +str title
+        +int duration_minutes
+        +Priority priority
+        +str category
+        +Frequency frequency
+        +time preferred_time
+        +date due_date
+        +date last_completed
+        +bool is_complete
+        +mark_complete(on: date) Task | None
+        +is_due(on: date) bool
+        +next_due_date(on: date) date
+        +edit(**changes) None
+    }
+
+    class Scheduler {
+        +Owner owner
+        +filter_tasks(on: date, pet_name: str, status: str) list~tuple~Pet, Task~~
+        +sort_by_priority(items) list~tuple~Pet, Task~~
+        +sort_by_time(items) list~tuple~Pet, Task~~
+        +find_requested_conflicts(items, on: date) list~Conflict~
+        +generate_plan(on: date) Plan
+        +detect_conflicts(entries: list~PlanEntry~) list~Conflict~
+        +explain_plan(plan: Plan) str
+    }
+
+    class Plan {
+        +date day
+        +list~PlanEntry~ entries
+        +list~SkippedTask~ skipped
+        +list~Conflict~ conflicts
+    }
+
+    class PlanEntry {
+        +Pet pet
+        +Task task
+        +datetime start
+        +datetime end
+    }
+
+    class SkippedTask {
+        +Pet pet
+        +Task task
+        +str reason
+    }
+
+    class Conflict {
+        +PlanEntry first
+        +PlanEntry second
+        +str reason
+    }
+
+    Owner "1" *-- "0..*" Pet : owns
+    Pet "1" *-- "0..*" Task : has
+    Task --> Priority
+    Task --> Frequency
+    Task ..> Task : next occurrence
+    Scheduler "1" --> "1" Owner : plans for
+    Scheduler ..> Plan : produces
+    Scheduler ..> Conflict : detects
+    Plan "1" *-- "0..*" PlanEntry
+    Plan "1" *-- "0..*" SkippedTask
+    Plan "1" *-- "0..*" Conflict
+    PlanEntry "*" --> "1" Pet
+    PlanEntry "*" --> "1" Task
+    SkippedTask "*" --> "1" Pet
+    SkippedTask "*" --> "1" Task
+    Conflict "*" --> "2" PlanEntry
