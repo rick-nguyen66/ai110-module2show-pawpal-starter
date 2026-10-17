@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import Enum, IntEnum
+from typing import Literal
 
 
 class Priority(IntEnum):
@@ -69,6 +70,16 @@ class Task:
             return self.last_completed < on
         return (on - self.last_completed).days >= 7
 
+    def next_due_date(self, on: date) -> date | None:
+        """Return the first date on or after `on` when this task is due (None if never again)."""
+        if self.is_due(on):
+            return on
+        if self.frequency is Frequency.ONCE:
+            return None
+        if self.frequency is Frequency.DAILY:
+            return max(on, self.last_completed) + timedelta(days=1)
+        return max(on, self.last_completed + timedelta(days=7))
+
     def edit(self, **changes) -> None:
         """Update one or more attributes of this task, re-running validation."""
         unknown = set(changes) - set(self.__dataclass_fields__)
@@ -79,7 +90,7 @@ class Task:
             setattr(self, name, value)
         try:
             self.__post_init__()
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, TypeError):
             for name, value in previous.items():
                 setattr(self, name, value)
             raise
@@ -170,6 +181,7 @@ class Plan:
     day: date
     entries: list[PlanEntry] = field(default_factory=list)
     skipped: list[SkippedTask] = field(default_factory=list)
+    conflicts: list[Conflict] = field(default_factory=list)  # overlapping *requested* times
 
 
 @dataclass
@@ -181,16 +193,32 @@ class Scheduler:
 
     Policy: the owner does one task at a time (no parallel care across pets).
     Due tasks are ordered by priority (high first), then preferred_time
-    (earliest first, None last), then shorter duration. Tasks are placed
-    back-to-back from day_start, never before their preferred_time; a task
-    that would end past the owner's available time is skipped.
+    (earliest first, None last), then shorter duration. Each task goes into the
+    earliest free gap in the owner's window that starts no earlier than its
+    preferred_time and is long enough; tasks that fit nowhere are skipped.
     """
 
     owner: Owner
 
-    def filter_tasks(self, on: date) -> list[tuple[Pet, Task]]:
-        """Return (pet, task) pairs that are due on the given date."""
-        return [(pet, task) for pet, task in self.owner.get_all_tasks() if task.is_due(on)]
+    def filter_tasks(
+        self,
+        on: date,
+        pet_name: str | None = None,
+        status: Literal["due", "done"] | None = "due",
+    ) -> list[tuple[Pet, Task]]:
+        """Return (pet, task) pairs matching the given pet and status on a date.
+
+        status="due" keeps tasks still needing doing on `on`, "done" keeps tasks
+        already satisfied for `on`, and None keeps every task.
+        """
+        items = self.owner.get_all_tasks()
+        if pet_name is not None:
+            items = [(pet, task) for pet, task in items if pet.name == pet_name]
+        if status == "due":
+            items = [(pet, task) for pet, task in items if task.is_due(on)]
+        elif status == "done":
+            items = [(pet, task) for pet, task in items if not task.is_due(on)]
+        return items
 
     def sort_by_priority(self, items: list[tuple[Pet, Task]]) -> list[tuple[Pet, Task]]:
         """Return items ordered by priority, then preferred_time, then duration."""
@@ -202,27 +230,50 @@ class Scheduler:
 
         return sorted(items, key=key)  # stable, so ties keep pet/task insertion order
 
+    def sort_by_time(self, items: list[tuple[Pet, Task]]) -> list[tuple[Pet, Task]]:
+        """Return items ordered by preferred_time (earliest first, None last)."""
+        return sorted(items, key=lambda item: (item[1].preferred_time is None, item[1].preferred_time or time.min))
+
+    def find_requested_conflicts(self, items: list[tuple[Pet, Task]], on: date) -> list[Conflict]:
+        """Return pairs of tasks whose preferred_time slots overlap on the given date."""
+        requested = []
+        for pet, task in items:
+            if task.preferred_time is None:
+                continue
+            start = datetime.combine(on, task.preferred_time)
+            requested.append(PlanEntry(pet, task, start, start + timedelta(minutes=task.duration_minutes)))
+        return self.detect_conflicts(requested)
+
     def generate_plan(self, on: date) -> Plan:
         """Build the plan for the given date within the owner's available time."""
         plan = Plan(day=on)
         day_start = datetime.combine(on, self.owner.day_start)
         day_end = day_start + timedelta(minutes=self.owner.available_minutes)
-        cursor = day_start
+        free: list[tuple[datetime, datetime]] = [(day_start, day_end)] if day_end > day_start else []
 
-        for pet, task in self.sort_by_priority(self.filter_tasks(on)):
-            start = cursor
+        due = self.filter_tasks(on)
+        plan.conflicts = self.find_requested_conflicts(due, on)
+
+        for pet, task in self.sort_by_priority(due):
+            earliest = day_start
             if task.preferred_time is not None:
-                start = max(start, datetime.combine(on, task.preferred_time))
-            end = start + timedelta(minutes=task.duration_minutes)
-            if end > day_end:
-                if start >= day_end:
+                earliest = max(earliest, datetime.combine(on, task.preferred_time))
+            duration = timedelta(minutes=task.duration_minutes)
+
+            for i, (gap_start, gap_end) in enumerate(free):
+                start = max(gap_start, earliest)
+                end = start + duration
+                if end <= gap_end:
+                    pieces = [(gap_start, start), (end, gap_end)]
+                    free[i:i + 1] = [(s, e) for s, e in pieces if e > s]
+                    plan.entries.append(PlanEntry(pet, task, start, end))
+                    break
+            else:
+                if earliest >= day_end:
                     reason = "preferred time is after the owner's available time"
                 else:
-                    reason = "not enough time remaining"
+                    reason = "not enough free time remaining"
                 plan.skipped.append(SkippedTask(pet, task, reason))
-                continue
-            plan.entries.append(PlanEntry(pet, task, start, end))
-            cursor = end
 
         plan.entries.sort(key=lambda e: e.start)
         return plan
@@ -268,9 +319,8 @@ class Scheduler:
             for skipped in plan.skipped:
                 lines.append(f"  {skipped.pet.name}: {skipped.task.title} - {skipped.reason}")
 
-        conflicts = self.detect_conflicts(plan.entries)
-        if conflicts:
-            lines.append("Conflicts:")
-            for conflict in conflicts:
+        if plan.conflicts:
+            lines.append("Requested-time conflicts (lower-priority task was moved):")
+            for conflict in plan.conflicts:
                 lines.append(f"  {conflict.reason}")
         return "\n".join(lines)
