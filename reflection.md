@@ -25,12 +25,13 @@ The biggest change made was specifying the plan detail object. The initial skele
 
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
 - How did you decide which constraints mattered most?
+The scheduler looks at five things: the owner's available time window (day_start plus available_minutes), each task's priority, each task's preferred start time, how long each task takes, and whether the task is due today based on how often it repeats. I treated time and priority as the most important, because a busy pet owner can't do more than their free time allows, and essentials like meds and feeding should never get bumped by something optional like grooming. Preferred time and duration only break ties, so high-priority tasks get scheduled first, and any task that doesn't fit gets skipped with a reason instead of overflowing the day.
 
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
-
+ The scheduler places tasks greedily in a single pass, highest priority first. It never goes back to fill gaps. For example, if a high-priority task has a late preferred time, the schedule jumps ahead to that time. Any earlier free time is then lost, and a lower-priority task that would have fit there can get skipped. A greedy approach is simple and predictable, with skipped tasks explained with a clear reason and easy to be seen when left out. Also, an owner realistically cares more about high-priority essentials like medicine and feeding, especially if they are limited on time.
 ---
 
 ## 3. AI Collaboration
@@ -39,12 +40,13 @@ The biggest change made was specifying the plan detail object. The initial skele
 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
 - What kinds of prompts or questions were most helpful?
+I primarily used AI to expand/flesh out the plan I first outlined in the Mermaid diagram. I also used it to review any possible logical issues in my design but made sure that it was within scope and did not conflict with my known constraints. Another important role AI played was creating the tests, however, it was after I clearly stated what the tests should cover and verifying that it tests for intended behavior.
 
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 - How did you evaluate or verify what the AI suggested?
-
+At one point, the AI suggested expanding the owner field to have a list of blocks of time throughout the day. While this could be a good recommendation, this was a bit outside of the scope of the assignment. Often, I have to prevent the AI from straying away from the original intent. In terms of verifying what AI suggests, I always refer its recommendations with the original blueprint, for example, the classes and constraints in the Mermaid diagram.
 ---
 
 ## 4. Testing and Verification
